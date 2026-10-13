@@ -8,10 +8,10 @@ import { Platform } from 'react-native';
 const LAPTOP_WIFI_IP = '10.222.153.17'; 
 
 export const API_URL = Platform.select({
-  web: 'http://localhost:8080/api',
-  android: `http://${LAPTOP_WIFI_IP}:8080/api`,
-  ios: `http://${LAPTOP_WIFI_IP}:8080/api`,
-  default: `http://${LAPTOP_WIFI_IP}:8080/api`,
+  web: 'http://localhost:8082/api',
+  android: `http://${LAPTOP_WIFI_IP}:8082/api`,
+  ios: `http://${LAPTOP_WIFI_IP}:8082/api`,
+  default: `http://${LAPTOP_WIFI_IP}:8082/api`,
 });
 
 export interface UserSession {

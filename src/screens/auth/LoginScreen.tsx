@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -9,7 +9,6 @@ import {
   KeyboardAvoidingView,
   ScrollView,
   Platform,
-  TouchableWithoutFeedback,
   Keyboard,
   ActivityIndicator
 } from 'react-native';
@@ -24,7 +23,15 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
   const [loading, setLoading] = useState(false);
   const [focusedInput, setFocusedInput] = useState<'mobile' | 'password' | null>(null);
 
+  const scrollViewRef = useRef<ScrollView>(null);
   const t = mobileTranslations[lang];
+
+  const handlePasswordFocus = () => {
+    setFocusedInput('password');
+    setTimeout(() => {
+      scrollViewRef.current?.scrollToEnd({ animated: true });
+    }, 150);
+  };
 
   const handleLogin = async () => {
     Keyboard.dismiss();
@@ -63,149 +70,157 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     <KeyboardAvoidingView
       style={styles.keyboardView}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
     >
-      <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
-          bounces={false}
+      <ScrollView
+        ref={scrollViewRef}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
+        {/* TOP SACRED SLOGAN & BRANDING - Tapping header dismisses keyboard */}
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={Keyboard.dismiss}
+          style={styles.header}
         >
-          {/* TOP SACRED SLOGAN & BRANDING */}
-          <View style={styles.header}>
-            <View style={styles.sloganPill}>
-              <Text style={styles.sloganText}>🕉️ ஸ்ரீ முத்தாரம்மன் துணை 🕉️</Text>
-            </View>
-
-            <View style={styles.logoRing}>
-              <View style={styles.logo}>
-                <Text style={styles.logoText}>ஊ</Text>
-              </View>
-            </View>
-
-            <Text style={styles.title}>{t.appName}</Text>
-            <Text style={styles.tamilSub}>
-              {lang === 'ta' ? 'சங்க நிதி & மாதாந்திர சந்தா மேலாண்மை' : 'Temple Sangam Finance & Chanda'}
-            </Text>
-
-            {/* Language Switcher Pill */}
-            <TouchableOpacity
-              style={styles.langBtn}
-              activeOpacity={0.7}
-              onPress={() => setLang(lang === 'en' ? 'ta' : 'en')}
-            >
-              <Text style={styles.langGlobe}>🌐</Text>
-              <Text style={styles.langText}>
-                {lang === 'en' ? 'தமிழில் பார்க்க (தமிழ்)' : 'Switch to English'}
-              </Text>
-            </TouchableOpacity>
+          <View style={styles.sloganPill}>
+            <Text style={styles.sloganText}>🕉️ ஸ்ரீ முத்தாரம்மன் துணை 🕉️</Text>
           </View>
 
-          {/* LOGIN CARD */}
-          <View style={styles.card}>
-            <Text style={styles.cardHeading}>
-              {lang === 'ta' ? 'உள்நுழைவு' : 'Account Login'}
-            </Text>
-            <Text style={styles.cardSub}>
-              {lang === 'ta'
-                ? 'உங்கள் கணக்கில் நுழைய விவரங்களை அளிக்கவும்'
-                : 'Enter your credentials to access your dashboard'}
-            </Text>
-
-            {/* MOBILE NUMBER INPUT */}
-            <View style={styles.fieldWrapper}>
-              <Text style={styles.label}>{t.mobileNumber} *</Text>
-              <View
-                style={[
-                  styles.inputContainer,
-                  focusedInput === 'mobile' && styles.inputFocused
-                ]}
-              >
-                <Text style={styles.inputIcon}>📱</Text>
-                <TextInput
-                  style={styles.input}
-                  placeholder={lang === 'ta' ? '10 இலக்க அலைபேசி எண்' : '10-digit mobile number'}
-                  placeholderTextColor="#94A3B8"
-                  value={mobileNumber}
-                  onChangeText={setMobileNumber}
-                  keyboardType="phone-pad"
-                  maxLength={10}
-                  onFocus={() => setFocusedInput('mobile')}
-                  onBlur={() => setFocusedInput(null)}
-                  returnKeyType="next"
-                />
-              </View>
+          <View style={styles.logoRing}>
+            <View style={styles.logo}>
+              <Text style={styles.logoText}>ஊ</Text>
             </View>
+          </View>
 
-            {/* PASSWORD INPUT WITH EYE TOGGLE */}
-            <View style={styles.fieldWrapper}>
-              <View style={styles.passwordLabelRow}>
-                <Text style={styles.label}>{t.password} *</Text>
-              </View>
-              <View
-                style={[
-                  styles.inputContainer,
-                  focusedInput === 'password' && styles.inputFocused
-                ]}
-              >
-                <Text style={styles.inputIcon}>🔒</Text>
-                <TextInput
-                  style={styles.passwordInput}
-                  placeholder="••••••••"
-                  placeholderTextColor="#94A3B8"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                  onFocus={() => setFocusedInput('password')}
-                  onBlur={() => setFocusedInput(null)}
-                  returnKeyType="done"
-                  onSubmitEditing={handleLogin}
-                />
-                <TouchableOpacity
-                  style={styles.eyeBtn}
-                  onPress={() => setShowPassword(!showPassword)}
-                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-                  activeOpacity={0.7}
-                >
-                  <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '🙈'}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
+          <Text style={styles.title}>{t.appName}</Text>
+          <Text style={styles.tamilSub}>
+            {lang === 'ta' ? 'சங்க நிதி & மாதாந்திர சந்தா மேலாண்மை' : 'Temple Sangam Finance & Chanda'}
+          </Text>
 
-            {/* LOGIN BUTTON */}
-            <TouchableOpacity
-              style={[styles.btn, loading && styles.btnDisabled]}
-              onPress={handleLogin}
-              disabled={loading}
-              activeOpacity={0.8}
+          {/* Language Switcher Pill */}
+          <TouchableOpacity
+            style={styles.langBtn}
+            activeOpacity={0.7}
+            onPress={() => setLang(lang === 'en' ? 'ta' : 'en')}
+          >
+            <Text style={styles.langGlobe}>🌐</Text>
+            <Text style={styles.langText}>
+              {lang === 'en' ? 'தமிழில் பார்க்க (தமிழ்)' : 'Switch to English'}
+            </Text>
+          </TouchableOpacity>
+        </TouchableOpacity>
+
+        {/* LOGIN CARD */}
+        <View style={styles.card}>
+          <Text style={styles.cardHeading}>
+            {lang === 'ta' ? 'உள்நுழைவு' : 'Account Login'}
+          </Text>
+          <Text style={styles.cardSub}>
+            {lang === 'ta'
+              ? 'உங்கள் கணக்கில் நுழைய விவரங்களை அளிக்கவும்'
+              : 'Enter your credentials to access your dashboard'}
+          </Text>
+
+          {/* MOBILE NUMBER INPUT */}
+          <View style={styles.fieldWrapper}>
+            <Text style={styles.label}>{t.mobileNumber} *</Text>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === 'mobile' && styles.inputFocused
+              ]}
             >
-              {loading ? (
-                <View style={styles.btnLoadingRow}>
-                  <ActivityIndicator size="small" color="#0F172A" />
-                  <Text style={[styles.btnText, { marginLeft: 8 }]}>
-                    {lang === 'ta' ? 'உள்நுழைகிறது...' : 'Signing in...'}
-                  </Text>
-                </View>
-              ) : (
-                <Text style={styles.btnText}>
-                  {lang === 'ta' ? 'உள்நுழைக →' : 'Login to Account →'}
+              <Text style={styles.inputIcon}>📱</Text>
+              <TextInput
+                style={styles.input}
+                placeholder={lang === 'ta' ? '10 இலக்க அலைபேசி எண்' : '10-digit mobile number'}
+                placeholderTextColor="#94A3B8"
+                value={mobileNumber}
+                onChangeText={setMobileNumber}
+                keyboardType="phone-pad"
+                maxLength={10}
+                onFocus={() => setFocusedInput('mobile')}
+                onBlur={() => setFocusedInput(null)}
+                returnKeyType="next"
+              />
+            </View>
+          </View>
+
+          {/* PASSWORD INPUT WITH EYE TOGGLE */}
+          <View style={styles.fieldWrapper}>
+            <View style={styles.passwordLabelRow}>
+              <Text style={styles.label}>{t.password} *</Text>
+            </View>
+            <View
+              style={[
+                styles.inputContainer,
+                focusedInput === 'password' && styles.inputFocused
+              ]}
+            >
+              <Text style={styles.inputIcon}>🔒</Text>
+              <TextInput
+                style={styles.passwordInput}
+                placeholder="••••••••"
+                placeholderTextColor="#94A3B8"
+                secureTextEntry={!showPassword}
+                value={password}
+                onChangeText={setPassword}
+                onFocus={handlePasswordFocus}
+                onBlur={() => setFocusedInput(null)}
+                returnKeyType="done"
+                onSubmitEditing={handleLogin}
+              />
+              <TouchableOpacity
+                style={styles.eyeBtn}
+                onPress={() => setShowPassword(!showPassword)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.eyeIcon}>{showPassword ? '👁️' : '🙈'}</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          {/* LOGIN BUTTON */}
+          <TouchableOpacity
+            style={[styles.btn, loading && styles.btnDisabled]}
+            onPress={handleLogin}
+            disabled={loading}
+            activeOpacity={0.8}
+          >
+            {loading ? (
+              <View style={styles.btnLoadingRow}>
+                <ActivityIndicator size="small" color="#0F172A" />
+                <Text style={[styles.btnText, { marginLeft: 8 }]}>
+                  {lang === 'ta' ? 'உள்நுழைகிறது...' : 'Signing in...'}
                 </Text>
-              )}
-            </TouchableOpacity>
-
-            {/* SECURITY BADGE FOOTER */}
-            <View style={styles.securityRow}>
-              <Text style={styles.securityIcon}>🛡️</Text>
-              <Text style={styles.securityText}>
-                {lang === 'ta'
-                  ? 'பாதுகாப்பான மற்றும் மறைகுறியாக்கப்பட்ட அணுகல்'
-                  : 'Secured with 256-bit encryption'}
+              </View>
+            ) : (
+              <Text style={styles.btnText}>
+                {lang === 'ta' ? 'உள்நுழைக →' : 'Login to Account →'}
               </Text>
-            </View>
-          </View>
-        </ScrollView>
-      </TouchableWithoutFeedback>
+            )}
+          </TouchableOpacity>
+
+          {/* SECURITY BADGE FOOTER */}
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={Keyboard.dismiss}
+            style={styles.securityRow}
+          >
+            <Text style={styles.securityIcon}>🛡️</Text>
+            <Text style={styles.securityText}>
+              {lang === 'ta'
+                ? 'பாதுகாப்பான மற்றும் மறைகுறியாக்கப்பட்ட அணுகல்'
+                : 'Secured with 256-bit encryption'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
     </KeyboardAvoidingView>
   );
 };
