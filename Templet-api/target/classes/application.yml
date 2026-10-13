@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: templet-api
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/temple_database}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:Adsadmin1-2}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+app:
+  jwt:
+    secret: 9a6f8b1c4e7d2a5f8b1c4e7d2a5f8b1c4e7d2a5f8b1c4e7d2a5f8b1c4e7d2a5f
+    expiration-ms: 86400000 # 24 hours
+    refresh-expiration-ms: 604800000 # 7 days
+  cors:
+    allowed-origins: "*"
+
+logging:
+  level:
+    root: INFO
+    com.oornithi: DEBUG
