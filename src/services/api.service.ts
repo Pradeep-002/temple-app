@@ -1,17 +1,15 @@
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-// 1. IP Configuration:
-// - Physical Phone via Expo Go on Wi-Fi: use your laptop Wi-Fi IP (e.g. '10.222.153.17')
-// - Android Studio Emulator: use '10.0.2.2'
-// - Web Browser preview: use 'localhost'
-const LAPTOP_WIFI_IP = '10.222.153.17'; 
+// Live HTTPS Tunnel URL for mobile app (Bypasses Windows Firewall and Wi-Fi AP isolation)
+const TUNNEL_URL = 'https://neat-pets-check.loca.lt/api';
+const LOCAL_WIFI_URL = 'http://10.222.153.17:8082/api';
 
 export const API_URL = Platform.select({
   web: 'http://localhost:8082/api',
-  android: `http://${LAPTOP_WIFI_IP}:8082/api`,
-  ios: `http://${LAPTOP_WIFI_IP}:8082/api`,
-  default: `http://${LAPTOP_WIFI_IP}:8082/api`,
+  android: TUNNEL_URL,
+  ios: TUNNEL_URL,
+  default: TUNNEL_URL,
 });
 
 export interface UserSession {
@@ -73,17 +71,27 @@ export const apiRequest = async (endpoint: string, method: string = 'GET', body?
   const session = await getUserSession();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    'Bypass-Tunnel-Reminder': 'true',
   };
 
   if (session?.token) {
     headers['Authorization'] = `Bearer ${session.token}`;
   }
 
-  const response = await fetch(`${API_URL}${endpoint}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
-  return response.json();
+  try {
+    const response = await fetch(`${API_URL}${endpoint}`, {
+      method,
+      headers,
+      body: body ? JSON.stringify(body) : undefined,
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+    return await response.json();
+  } catch (err: any) {
+    clearTimeout(timeoutId);
+    throw err;
+  }
 };

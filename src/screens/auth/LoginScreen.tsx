@@ -24,13 +24,11 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
   const [focusedInput, setFocusedInput] = useState<'mobile' | 'password' | null>(null);
 
   const scrollViewRef = useRef<ScrollView>(null);
+  const passwordInputRef = useRef<TextInput>(null);
   const t = mobileTranslations[lang];
 
   const handlePasswordFocus = () => {
     setFocusedInput('password');
-    setTimeout(() => {
-      scrollViewRef.current?.scrollToEnd({ animated: true });
-    }, 150);
   };
 
   const handleLogin = async () => {
@@ -70,22 +68,18 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
     <KeyboardAvoidingView
       style={styles.keyboardView}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+      enabled={Platform.OS === 'ios'}
     >
       <ScrollView
         ref={scrollViewRef}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
+        keyboardDismissMode={Platform.OS === 'ios' ? 'on-drag' : 'none'}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
-        {/* TOP SACRED SLOGAN & BRANDING - Tapping header dismisses keyboard */}
-        <TouchableOpacity
-          activeOpacity={1}
-          onPress={Keyboard.dismiss}
-          style={styles.header}
-        >
+        {/* TOP SACRED SLOGAN & BRANDING */}
+        <View style={styles.header}>
           <View style={styles.sloganPill}>
             <Text style={styles.sloganText}>🕉️ ஸ்ரீ முத்தாரம்மன் துணை 🕉️</Text>
           </View>
@@ -112,7 +106,7 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
               {lang === 'en' ? 'தமிழில் பார்க்க (தமிழ்)' : 'Switch to English'}
             </Text>
           </TouchableOpacity>
-        </TouchableOpacity>
+        </View>
 
         {/* LOGIN CARD */}
         <View style={styles.card}>
@@ -143,9 +137,13 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
                 onChangeText={setMobileNumber}
                 keyboardType="phone-pad"
                 maxLength={10}
+                autoCapitalize="none"
+                autoCorrect={false}
                 onFocus={() => setFocusedInput('mobile')}
                 onBlur={() => setFocusedInput(null)}
                 returnKeyType="next"
+                onSubmitEditing={() => passwordInputRef.current?.focus()}
+                blurOnSubmit={false}
               />
             </View>
           </View>
@@ -163,12 +161,15 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
             >
               <Text style={styles.inputIcon}>🔒</Text>
               <TextInput
+                ref={passwordInputRef}
                 style={styles.passwordInput}
                 placeholder="••••••••"
                 placeholderTextColor="#94A3B8"
                 secureTextEntry={!showPassword}
                 value={password}
                 onChangeText={setPassword}
+                autoCapitalize="none"
+                autoCorrect={false}
                 onFocus={handlePasswordFocus}
                 onBlur={() => setFocusedInput(null)}
                 returnKeyType="done"
@@ -207,18 +208,14 @@ export const LoginScreen = ({ onLoginSuccess }: { onLoginSuccess: (user: any) =>
           </TouchableOpacity>
 
           {/* SECURITY BADGE FOOTER */}
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={Keyboard.dismiss}
-            style={styles.securityRow}
-          >
+          <View style={styles.securityRow}>
             <Text style={styles.securityIcon}>🛡️</Text>
             <Text style={styles.securityText}>
               {lang === 'ta'
                 ? 'பாதுகாப்பான மற்றும் மறைகுறியாக்கப்பட்ட அணுகல்'
                 : 'Secured with 256-bit encryption'}
             </Text>
-          </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
     </KeyboardAvoidingView>
@@ -232,9 +229,9 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    justifyContent: 'center',
     paddingHorizontal: 20,
-    paddingVertical: 36
+    paddingTop: Platform.OS === 'android' ? 24 : 36,
+    paddingBottom: 36
   },
   header: {
     alignItems: 'center',
@@ -359,7 +356,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#E2E8F0',
+    borderColor: '#CBD5E1',
     borderRadius: 12,
     backgroundColor: '#F8FAFC',
     paddingHorizontal: 12,
@@ -368,10 +365,7 @@ const styles = StyleSheet.create({
   inputFocused: {
     borderColor: '#D4AF37', // Golden focus border
     backgroundColor: '#FFFFFF',
-    shadowColor: '#D4AF37',
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 2
+    borderWidth: 2
   },
   inputIcon: {
     fontSize: 16,

@@ -74,7 +74,7 @@ export const MemberDashboardScreen = ({
       const session = await getUserSession();
       if (session) {
         setUserName(session.name);
-        setUserCode(session.memberCode || 'MEMBER');
+        setUserCode(session.memberCode || (session.role === 'COLLECTOR' ? 'COLLECTOR' : 'MEMBER'));
         setSangamName(session.sangamName || 'Oor Nithi Sangam');
         setSlogan(session.slogan || '🕉️ ஸ்ரீ முத்தாரம்மன் துணை 🕉️');
       }
