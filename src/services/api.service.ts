@@ -78,8 +78,12 @@ export const apiRequest = async (endpoint: string, method: string = 'GET', body?
     headers['Authorization'] = `Bearer ${session.token}`;
   }
 
+  if (session?.sangamId) {
+    headers['X-Sangam-ID'] = session.sangamId;
+  }
+
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
   try {
     const response = await fetch(`${API_URL}${endpoint}`, {
@@ -89,7 +93,17 @@ export const apiRequest = async (endpoint: string, method: string = 'GET', body?
       signal: controller.signal,
     });
     clearTimeout(timeoutId);
-    return await response.json();
+
+    const rawText = await response.text();
+    try {
+      return JSON.parse(rawText);
+    } catch {
+      return {
+        success: false,
+        message: rawText || `HTTP ${response.status}`,
+        data: null,
+      };
+    }
   } catch (err: any) {
     clearTimeout(timeoutId);
     throw err;

@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { apiRequest, getMediaUrl } from '../../services/api.service';
 import { mobileTranslations, MobileLanguage } from '../../i18n/translations';
+import { getTodayDateStr, getYesterdayDateStr } from './AdminCollectionsScreen';
 
 const MemberAvatar: React.FC<{ name?: string; profileImageUrl?: string }> = ({ name, profileImageUrl }) => {
   const [imageError, setImageError] = useState(false);
@@ -66,6 +67,58 @@ export const AdminMembersScreen: React.FC<AdminMembersProps> = ({ lang = 'ta' })
   const [formStatus, setFormStatus] = useState<'ACTIVE' | 'INACTIVE'>('ACTIVE');
   const [formGender, setFormGender] = useState<'MALE' | 'FEMALE' | 'OTHER'>('MALE');
   const [formAddress, setFormAddress] = useState('');
+  const [formJoinDate, setFormJoinDate] = useState<string>(getTodayDateStr);
+  const [dateError, setDateError] = useState<string>('');
+
+  // Calendar Date Picker Modal State
+  const [showDatePickerModal, setShowDatePickerModal] = useState<boolean>(false);
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth() + 1);
+
+  const MONTH_NAMES = [
+    { value: 1, en: 'January', ta: 'ஜனவரி' },
+    { value: 2, en: 'February', ta: 'பிப்ரவரி' },
+    { value: 3, en: 'March', ta: 'மார்ச்' },
+    { value: 4, en: 'April', ta: 'ஏப்ரல்' },
+    { value: 5, en: 'May', ta: 'மே' },
+    { value: 6, en: 'June', ta: 'ஜூன்' },
+    { value: 7, en: 'July', ta: 'ஜூலை' },
+    { value: 8, en: 'August', ta: 'ஆகஸ்ட்' },
+    { value: 9, en: 'September', ta: 'செப்டம்பர்' },
+    { value: 10, en: 'October', ta: 'அக்டோபர்' },
+    { value: 11, en: 'November', ta: 'நவம்பர்' },
+    { value: 12, en: 'December', ta: 'டிசம்பர்' }
+  ];
+
+  const todayDateStr = getTodayDateStr();
+  const yesterdayDateStr = getYesterdayDateStr();
+  const realNow = new Date();
+  const currentRealYear = realNow.getFullYear();
+  const currentRealMonth = realNow.getMonth() + 1;
+
+  const canGoNextMonth = calendarYear < currentRealYear || (calendarYear === currentRealYear && calendarMonth < currentRealMonth);
+
+  const handlePrevMonth = () => {
+    if (calendarMonth === 1) {
+      setCalendarMonth(12);
+      setCalendarYear((y) => y - 1);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (!canGoNextMonth) return;
+    if (calendarMonth === 12) {
+      setCalendarMonth(1);
+      setCalendarYear((y) => y + 1);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  };
+
+  const daysInCalendarMonth = new Date(calendarYear, calendarMonth, 0).getDate();
+  const firstDayCalendarIndex = new Date(calendarYear, calendarMonth - 1, 1).getDay();
 
   useEffect(() => {
     loadMembers();
@@ -101,6 +154,8 @@ export const AdminMembersScreen: React.FC<AdminMembersProps> = ({ lang = 'ta' })
     setFormStatus('ACTIVE');
     setFormGender('MALE');
     setFormAddress('');
+    setFormJoinDate(getTodayDateStr());
+    setDateError('');
     setShowModal(true);
   };
 
@@ -114,6 +169,8 @@ export const AdminMembersScreen: React.FC<AdminMembersProps> = ({ lang = 'ta' })
     setFormStatus(member.status || 'ACTIVE');
     setFormGender(member.gender || 'MALE');
     setFormAddress(member.address || '');
+    setFormJoinDate(member.joinDate ? String(member.joinDate).split('T')[0] : getTodayDateStr());
+    setDateError('');
     setShowModal(true);
   };
 
@@ -128,6 +185,12 @@ export const AdminMembersScreen: React.FC<AdminMembersProps> = ({ lang = 'ta' })
       return;
     }
 
+    const trimmedJoinDate = (formJoinDate || getTodayDateStr()).trim();
+    if (trimmedJoinDate > todayDateStr) {
+      Alert.alert(t.error, t.futureDateError || 'Future date is not allowed for join date');
+      return;
+    }
+
     setSubmitting(true);
     try {
       const payload: any = {
@@ -136,7 +199,8 @@ export const AdminMembersScreen: React.FC<AdminMembersProps> = ({ lang = 'ta' })
         email: formEmail.trim() || undefined,
         role: formRole,
         gender: formGender,
-        address: formAddress.trim() || undefined
+        address: formAddress.trim() || undefined,
+        joinDate: trimmedJoinDate || undefined
       };
 
       let res;
@@ -289,6 +353,87 @@ export const AdminMembersScreen: React.FC<AdminMembersProps> = ({ lang = 'ta' })
                 placeholder="9876543210"
               />
 
+              {/* Join Date Field */}
+              <Text style={styles.inputLabel}>
+                {lang === 'ta' ? 'இணைந்த தேதி (Join Date) *' : 'Join Date *'}
+              </Text>
+              <View style={styles.dateInputRow}>
+                <TextInput
+                  style={[styles.textInput, styles.dateTextInput, dateError ? styles.textInputError : null]}
+                  value={formJoinDate}
+                  onChangeText={(text) => {
+                    setFormJoinDate(text);
+                    if (text.trim() > todayDateStr) {
+                      setDateError(t.futureDateError || 'Future date is not allowed for join date');
+                    } else {
+                      setDateError('');
+                    }
+                  }}
+                  placeholder="YYYY-MM-DD"
+                  maxLength={10}
+                />
+                <TouchableOpacity
+                  style={styles.calendarPickerBtn}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    try {
+                      if (formJoinDate && formJoinDate.length === 10) {
+                        const parts = formJoinDate.split('-');
+                        const y = parseInt(parts[0], 10);
+                        const m = parseInt(parts[1], 10);
+                        if (!isNaN(y) && !isNaN(m)) {
+                          setCalendarYear(y);
+                          setCalendarMonth(m);
+                        }
+                      } else {
+                        setCalendarYear(currentRealYear);
+                        setCalendarMonth(currentRealMonth);
+                      }
+                    } catch (e) {
+                      setCalendarYear(currentRealYear);
+                      setCalendarMonth(currentRealMonth);
+                    }
+                    setShowDatePickerModal(true);
+                  }}
+                >
+                  <Text style={styles.calendarPickerBtnText}>📅 {lang === 'ta' ? 'நாட்காட்டி' : 'Calendar'}</Text>
+                </TouchableOpacity>
+              </View>
+
+              <View style={styles.quickDateChipsRow}>
+                <TouchableOpacity
+                  style={[styles.quickDateChip, formJoinDate === todayDateStr && styles.quickDateChipActive]}
+                  onPress={() => {
+                    setFormJoinDate(todayDateStr);
+                    setDateError('');
+                  }}
+                >
+                  <Text style={[styles.quickDateChipText, formJoinDate === todayDateStr && styles.quickDateChipTextActive]}>
+                    ✓ {lang === 'ta' ? 'இன்று (Today)' : 'Today'}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={[styles.quickDateChip, formJoinDate === yesterdayDateStr && styles.quickDateChipActive]}
+                  onPress={() => {
+                    setFormJoinDate(yesterdayDateStr);
+                    setDateError('');
+                  }}
+                >
+                  <Text style={[styles.quickDateChipText, formJoinDate === yesterdayDateStr && styles.quickDateChipTextActive]}>
+                    {lang === 'ta' ? 'நேற்று (Yesterday)' : 'Yesterday'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {dateError ? (
+                <Text style={styles.dateErrorText}>⚠️ {dateError}</Text>
+              ) : (
+                <Text style={styles.dateHelperText}>
+                  {lang === 'ta' ? 'இன்று அல்லது முந்தைய தேதியை மட்டுமே தேர்ந்தெடுக்க முடியும்' : 'Only today or previous dates can be selected'}
+                </Text>
+              )}
+
               <Text style={styles.inputLabel}>{t.role} *</Text>
               <View style={styles.chipRow}>
                 {(['MEMBER', 'COLLECTOR', 'SANGAM_ADMIN'] as const).map((r) => (
@@ -368,6 +513,124 @@ export const AdminMembersScreen: React.FC<AdminMembersProps> = ({ lang = 'ta' })
               ) : (
                 <Text style={styles.submitBtnText}>{t.save}</Text>
               )}
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 5. CALENDAR DATE PICKER MODAL (FOR JOIN DATE) */}
+      <Modal
+        visible={showDatePickerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDatePickerModal(false)}
+      >
+        <View style={styles.modalOverlayCenter}>
+          <View style={styles.calendarModalCard}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity
+                style={styles.calendarNavBtn}
+                onPress={handlePrevMonth}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.calendarNavBtnText}>‹</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.calendarMonthTitle}>
+                {MONTH_NAMES.find(m => m.value === calendarMonth)?.[lang === 'ta' ? 'ta' : 'en'] || `Month ${calendarMonth}`} {calendarYear}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.calendarNavBtn, !canGoNextMonth && styles.calendarNavBtnDisabled]}
+                onPress={handleNextMonth}
+                disabled={!canGoNextMonth}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.calendarNavBtnText, !canGoNextMonth && { color: '#CBD5E1' }]}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Weekday Names */}
+            <View style={styles.calendarWeekRow}>
+              {(lang === 'ta'
+                ? ['ஞா', 'தி', 'செ', 'பு', 'வி', 'வெ', 'ச']
+                : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+              ).map((dayName, idx) => (
+                <Text key={idx} style={styles.calendarWeekDayText}>
+                  {dayName}
+                </Text>
+              ))}
+            </View>
+
+            {/* Calendar Days Grid */}
+            <View style={styles.calendarGrid}>
+              {/* Empty leading offset cells */}
+              {Array.from({ length: firstDayCalendarIndex }).map((_, idx) => (
+                <View key={`empty-${idx}`} style={styles.calendarDayCell} />
+              ))}
+
+              {/* Day numbers */}
+              {Array.from({ length: daysInCalendarMonth }).map((_, idx) => {
+                const dayNum = idx + 1;
+                const cellDateStr = `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                const isFuture = cellDateStr > todayDateStr;
+                const isSelected = formJoinDate === cellDateStr;
+                const isToday = cellDateStr === todayDateStr;
+
+                if (isFuture) {
+                  return (
+                    <View key={`day-${dayNum}`} style={styles.calendarDayCell}>
+                      <View style={[styles.calendarDayBtn, styles.calendarDayBtnDisabled]}>
+                        <Text style={[styles.calendarDayText, styles.calendarDayTextDisabled]}>
+                          {dayNum}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View key={`day-${dayNum}`} style={styles.calendarDayCell}>
+                    <TouchableOpacity
+                      style={[
+                        styles.calendarDayBtn,
+                        isToday && styles.calendarDayBtnToday,
+                        isSelected && styles.calendarDayBtnSelected
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setFormJoinDate(cellDateStr);
+                        setDateError('');
+                        setShowDatePickerModal(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.calendarDayText,
+                          isToday && styles.calendarDayTextToday,
+                          isSelected && styles.calendarDayTextSelected
+                        ]}
+                      >
+                        {dayNum}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={styles.calendarBottomNote}>
+              {lang === 'ta'
+                ? 'ℹ️ எதிர்கால தேதிகள் முடக்கப்பட்டுள்ளன (இன்று/முந்தைய தேதிகள் மட்டுமே)'
+                : 'ℹ️ Future dates are disabled (Today & past dates only)'}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.calendarCloseBtn}
+              activeOpacity={0.7}
+              onPress={() => setShowDatePickerModal(false)}
+            >
+              <Text style={styles.calendarCloseBtnText}>{t.cancel || 'Cancel'}</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -620,6 +883,10 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#0F172A'
   },
+  textInputError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2'
+  },
   chipRow: {
     flexDirection: 'row',
     gap: 8,
@@ -659,5 +926,202 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: 'bold',
     fontSize: 14
+  },
+  quickDateChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4,
+    marginTop: 4
+  },
+  quickDateChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1'
+  },
+  quickDateChipActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#16A34A'
+  },
+  quickDateChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  quickDateChipTextActive: {
+    color: '#15803D',
+    fontWeight: '700'
+  },
+  dateErrorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: 2,
+    marginBottom: 4
+  },
+  dateHelperText: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 4
+  },
+
+  // Payment Date & Calendar Picker Styles
+  dateInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6
+  },
+  dateTextInput: {
+    flex: 1
+  },
+  calendarPickerBtn: {
+    backgroundColor: '#0B3C2D',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#D4AF37'
+  },
+  calendarPickerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+
+  // Calendar Modal Styles
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+  calendarModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '92%',
+    maxWidth: 380,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 12,
+    paddingHorizontal: 4
+  },
+  calendarNavBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0'
+  },
+  calendarNavBtnDisabled: {
+    opacity: 0.3
+  },
+  calendarNavBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0B3C2D'
+  },
+  calendarMonthTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0B3C2D'
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 6
+  },
+  calendarWeekDayText: {
+    width: '14.28%',
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B'
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '100%',
+    marginBottom: 12
+  },
+  calendarDayCell: {
+    width: '14.28%',
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2
+  },
+  calendarDayBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  calendarDayBtnSelected: {
+    backgroundColor: '#0B3C2D'
+  },
+  calendarDayBtnToday: {
+    borderWidth: 1.5,
+    borderColor: '#D4AF37'
+  },
+  calendarDayBtnDisabled: {
+    backgroundColor: 'transparent',
+    opacity: 0.3
+  },
+  calendarDayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B'
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800'
+  },
+  calendarDayTextDisabled: {
+    color: '#94A3B8'
+  },
+  calendarDayTextToday: {
+    color: '#0B3C2D',
+    fontWeight: '800'
+  },
+  calendarBottomNote: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginBottom: 10,
+    textAlign: 'center'
+  },
+  calendarCloseBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 28,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8
+  },
+  calendarCloseBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#64748B'
   }
 });

@@ -306,24 +306,60 @@ export const buildReceiptHtml = (receipt: ReceiptData, fallbackSlogan?: string, 
 export const printOrShareReceipt = async (receipt: ReceiptData, action: 'print' | 'share' | 'download' = 'share') => {
   try {
     const html = buildReceiptHtml(receipt);
+
+    // On Web, Print.printToFileAsync is not supported; Print.printAsync opens the browser's print/PDF dialog
+    if (Platform.OS === 'web') {
+      await Print.printAsync({ html });
+      return;
+    }
+
     if (action === 'print') {
       await Print.printAsync({ html });
-    } else {
-      const { uri } = await Print.printToFileAsync({ html });
-      if (Platform.OS === 'web') {
-        window.open(uri, '_blank');
+      return;
+    }
+
+    if (action === 'download') {
+      if (Platform.OS === 'android') {
+        // On Android, Print.printAsync activates the native Android Print Spooler with "Save as PDF"
+        // allowing direct saving to phone Downloads / Internal Storage without requiring external apps
+        await Print.printAsync({ html });
       } else {
-        const canShare = await Sharing.isAvailableAsync();
-        if (canShare) {
-          await Sharing.shareAsync(uri, {
-            mimeType: 'application/pdf',
-            dialogTitle: `Receipt_${receipt.receiptNumber || 'Payment'}.pdf`,
-            UTI: 'com.adobe.pdf'
-          });
-        } else {
-          Alert.alert('Notice', 'Sharing is not available on this device');
+        // On iOS, Sharing.shareAsync opens the native Activity sheet with "Save to Files"
+        try {
+          const { uri } = await Print.printToFileAsync({ html });
+          const canShare = await Sharing.isAvailableAsync();
+          if (canShare) {
+            await Sharing.shareAsync(uri, {
+              mimeType: 'application/pdf',
+              dialogTitle: `Receipt_${receipt.receiptNumber || 'Payment'}.pdf`,
+              UTI: 'com.adobe.pdf'
+            });
+          } else {
+            await Print.printAsync({ html });
+          }
+        } catch {
+          await Print.printAsync({ html });
         }
       }
+      return;
+    }
+
+    // action === 'share'
+    try {
+      const { uri } = await Print.printToFileAsync({ html });
+      const canShare = await Sharing.isAvailableAsync();
+      if (canShare) {
+        await Sharing.shareAsync(uri, {
+          mimeType: 'application/pdf',
+          dialogTitle: `Share Receipt ${receipt.receiptNumber || ''}`,
+          UTI: 'com.adobe.pdf'
+        });
+      } else {
+        await Print.printAsync({ html });
+      }
+    } catch {
+      // If sharing fails on this device, fall back to native print/save as PDF
+      await Print.printAsync({ html });
     }
   } catch (error: any) {
     Alert.alert('Error', error?.message || 'Failed to generate PDF');

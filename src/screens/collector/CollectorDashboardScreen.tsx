@@ -16,6 +16,22 @@ import {
 import { apiRequest, getUserSession, getMediaUrl } from '../../services/api.service';
 import { mobileTranslations, MobileLanguage } from '../../i18n/translations';
 import { buildReceiptHtml, printOrShareReceipt, ReceiptData } from '../../utils/receiptGenerator';
+import { getTodayDateStr, getYesterdayDateStr } from '../admin/AdminCollectionsScreen';
+
+const MONTH_NAMES = [
+  { value: 1, en: 'January', ta: 'ஜனவரி', short: 'Jan' },
+  { value: 2, en: 'February', ta: 'பிப்ரவரி', short: 'Feb' },
+  { value: 3, en: 'March', ta: 'மார்ச்', short: 'Mar' },
+  { value: 4, en: 'April', ta: 'ஏப்ரல்', short: 'Apr' },
+  { value: 5, en: 'May', ta: 'மே', short: 'May' },
+  { value: 6, en: 'June', ta: 'ஜூன்', short: 'Jun' },
+  { value: 7, en: 'July', ta: 'ஜூலை', short: 'Jul' },
+  { value: 8, en: 'August', ta: 'ஆகஸ்ட்', short: 'Aug' },
+  { value: 9, en: 'September', ta: 'செப்டம்பர்', short: 'Sep' },
+  { value: 10, en: 'October', ta: 'அக்டோபர்', short: 'Oct' },
+  { value: 11, en: 'November', ta: 'நவம்பர்', short: 'Nov' },
+  { value: 12, en: 'December', ta: 'டிசம்பர்', short: 'Dec' }
+];
 
 const CollectorMemberAvatar: React.FC<{ name?: string; profileImageUrl?: string }> = ({ name, profileImageUrl }) => {
   const [imageError, setImageError] = useState(false);
@@ -77,6 +93,11 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
   const [selectedSlot, setSelectedSlot] = useState<any>(null);
 
   const [amountPaid, setAmountPaid] = useState('');
+  const [paymentDate, setPaymentDate] = useState<string>(getTodayDateStr);
+  const [dateError, setDateError] = useState<string>('');
+  const [showDatePickerModal, setShowDatePickerModal] = useState<boolean>(false);
+  const [calendarYear, setCalendarYear] = useState<number>(() => new Date().getFullYear());
+  const [calendarMonth, setCalendarMonth] = useState<number>(() => new Date().getMonth() + 1);
   const [paymentMode, setPaymentMode] = useState('UPI');
   const [referenceNumber, setReferenceNumber] = useState('');
   const [remarks, setRemarks] = useState('');
@@ -148,6 +169,8 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
     setSelectedMember(member);
     setShowCollectModal(true);
     setAmountPaid('');
+    setPaymentDate(getTodayDateStr());
+    setDateError('');
     setReferenceNumber('');
     setRemarks('');
     setSelectedSlot(null);
@@ -209,9 +232,17 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
 
     setSubmittingPayment(true);
     try {
+      const trimmedDate = (paymentDate || getTodayDateStr()).trim();
+      if (trimmedDate > todayDateStr) {
+        Alert.alert(t.error, t.futureDateError || 'Future payment date is not allowed');
+        setSubmittingPayment(false);
+        return;
+      }
+
       const payload = {
         memberCollectionId: slotId,
         amountPaid: amountNum,
+        paymentDate: trimmedDate,
         paymentMode,
         referenceNumber: referenceNumber.trim() || undefined,
         remarks: remarks.trim() || undefined
@@ -239,7 +270,7 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
           amountPaid: receiptResp?.amountPaid || amountNum,
           expectedAmount: selectedSlot?.expectedAmount,
           paymentMode,
-          paymentDate: receiptResp?.paymentDate || new Date(),
+          paymentDate: receiptResp?.paymentDate || trimmedDate,
           collectedBy: receiptResp?.collectedBy || session?.name || 'Collector',
           referenceNumber: referenceNumber.trim() || undefined
         };
@@ -257,6 +288,52 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
     }
   };
 
+  const handleCollectorMarkAllPaid = (member: any) => {
+    if (!member || submittingPayment) return;
+
+    Alert.alert(
+      lang === 'ta' ? 'வசூல் உறுதிப்படுத்தல்' : 'Confirm Payment',
+      lang === 'ta'
+        ? `Are you sure you want to mark all pending cycle payments as paid for ${member.name || member.memberName}?`
+        : `Are you sure you want to mark all pending cycle payments as paid for ${member.name || member.memberName}?`,
+      [
+        { text: t.cancel || 'Cancel', style: 'cancel' },
+        {
+          text: lang === 'ta' ? 'ஆம், செலுத்து' : 'Yes, Mark All Paid',
+          onPress: async () => {
+            try {
+              setSubmittingPayment(true);
+              const res = await apiRequest(
+                `/collections/member/${member.id || member.memberId}/mark-all-paid`,
+                'POST',
+                {
+                  paymentMode: paymentMode || 'CASH',
+                  paymentDate: getTodayDateStr(),
+                  remarks: 'Collector Mark All Paid'
+                }
+              );
+
+              if (res.success) {
+                setShowCollectModal(false);
+                Alert.alert(
+                  lang === 'ta' ? 'வெற்றி' : 'Success',
+                  res.data?.message || `Successfully marked all pending cycles as paid for ${member.name || member.memberName}.`
+                );
+                loadDashboardData();
+              } else {
+                Alert.alert(t.error || 'Error', res.message || 'Failed to mark all cycle payments as paid.');
+              }
+            } catch (err: any) {
+              Alert.alert(t.error || 'Error', err.message || 'Network error occurred');
+            } finally {
+              setSubmittingPayment(false);
+            }
+          }
+        }
+      ]
+    );
+  };
+
   // Filter members
   const filteredMembers = members.filter((m) => {
     const q = searchQuery.toLowerCase().trim();
@@ -269,6 +346,37 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
     if (!matchesSearch) return false;
     return true;
   });
+
+  // Calendar and Date Range Helpers
+  const todayDateStr = getTodayDateStr();
+  const yesterdayDateStr = getYesterdayDateStr();
+  const realNow = new Date();
+  const currentRealYear = realNow.getFullYear();
+  const currentRealMonth = realNow.getMonth() + 1;
+
+  const canGoNextMonth = calendarYear < currentRealYear || (calendarYear === currentRealYear && calendarMonth < currentRealMonth);
+
+  const handlePrevMonth = () => {
+    if (calendarMonth === 1) {
+      setCalendarMonth(12);
+      setCalendarYear((y) => y - 1);
+    } else {
+      setCalendarMonth((m) => m - 1);
+    }
+  };
+
+  const handleNextMonth = () => {
+    if (!canGoNextMonth) return;
+    if (calendarMonth === 12) {
+      setCalendarMonth(1);
+      setCalendarYear((y) => y + 1);
+    } else {
+      setCalendarMonth((m) => m + 1);
+    }
+  };
+
+  const daysInCalendarMonth = new Date(calendarYear, calendarMonth, 0).getDate();
+  const firstDayCalendarIndex = new Date(calendarYear, calendarMonth - 1, 1).getDay();
 
   return (
     <View style={styles.container}>
@@ -378,6 +486,18 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
                 <ActivityIndicator size="small" color="#0B3C2D" style={{ marginVertical: 20 }} />
               ) : (
                 <>
+                  {/* Mark All Paid Quick Action for Collector */}
+                  <TouchableOpacity
+                    style={styles.collectorMarkAllBtn}
+                    disabled={submittingPayment}
+                    onPress={() => handleCollectorMarkAllPaid(selectedMember)}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.collectorMarkAllBtnText}>
+                      ⚡ {lang === 'ta' ? 'அனைத்து நிலுவையும் செலுத்து (Mark All Paid)' : 'Mark All Pending Cycles as Paid'}
+                    </Text>
+                  </TouchableOpacity>
+
                   {/* Slot selector */}
                   <Text style={styles.inputLabel}>{t.selectSlot}</Text>
                   <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.slotRow}>
@@ -395,11 +515,23 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
                           onPress={() => !isPaid && handleSlotChange(slot)}
                           disabled={isPaid}
                         >
-                          <Text style={[styles.slotChipText, isSel && styles.slotChipTextSelected]}>
+                          <Text
+                            style={[
+                              styles.slotChipText,
+                              isSel && styles.slotChipTextSelected,
+                              isPaid && styles.slotChipTextPaid
+                            ]}
+                          >
                             {slot.monthName} {slot.year}
                           </Text>
-                          <Text style={[styles.slotChipSub, isSel && styles.slotChipSubSelected]}>
-                            {isPaid ? 'PAID' : `₹${slot.balanceAmount || slot.expectedAmount || 500}`}
+                          <Text
+                            style={[
+                              styles.slotChipSub,
+                              isSel && styles.slotChipSubSelected,
+                              isPaid && styles.slotChipSubPaid
+                            ]}
+                          >
+                            {isPaid ? (lang === 'ta' ? '✓ செலுத்தப்பட்டது' : '✓ PAID') : `₹${slot.balanceAmount || slot.expectedAmount || 500}`}
                           </Text>
                         </TouchableOpacity>
                       );
@@ -415,6 +547,89 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
                     keyboardType="numeric"
                     placeholder="500"
                   />
+
+                  {/* PAYMENT DATE FIELD */}
+                  <Text style={styles.inputLabel}>
+                    {t.paymentDate} / {lang === 'ta' ? 'வசூல் தேதி' : 'Payment Date'} *
+                  </Text>
+                  <View style={styles.dateInputRow}>
+                    <TextInput
+                      style={[styles.textInput, styles.dateTextInput, dateError ? styles.textInputError : null]}
+                      value={paymentDate}
+                      onChangeText={(text) => {
+                        setPaymentDate(text);
+                        if (text.trim() > todayDateStr) {
+                          setDateError(t.futureDateError || 'Future payment date is not allowed');
+                        } else {
+                          setDateError('');
+                        }
+                      }}
+                      placeholder="YYYY-MM-DD"
+                      placeholderTextColor="#94A3B8"
+                      maxLength={10}
+                    />
+                    <TouchableOpacity
+                      style={styles.calendarPickerBtn}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        try {
+                          if (paymentDate && paymentDate.length === 10) {
+                            const parts = paymentDate.split('-');
+                            const y = parseInt(parts[0], 10);
+                            const m = parseInt(parts[1], 10);
+                            if (!isNaN(y) && !isNaN(m)) {
+                              setCalendarYear(y);
+                              setCalendarMonth(m);
+                            }
+                          } else {
+                            setCalendarYear(currentRealYear);
+                            setCalendarMonth(currentRealMonth);
+                          }
+                        } catch (e) {
+                          setCalendarYear(currentRealYear);
+                          setCalendarMonth(currentRealMonth);
+                        }
+                        setShowDatePickerModal(true);
+                      }}
+                    >
+                      <Text style={styles.calendarPickerBtnText}>📅 {lang === 'ta' ? 'நாட்காட்டி' : 'Calendar'}</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {/* Quick Preset Buttons (Today, Yesterday) */}
+                  <View style={styles.quickDateChipsRow}>
+                    <TouchableOpacity
+                      style={[styles.quickDateChip, paymentDate === todayDateStr && styles.quickDateChipActive]}
+                      onPress={() => {
+                        setPaymentDate(todayDateStr);
+                        setDateError('');
+                      }}
+                    >
+                      <Text style={[styles.quickDateChipText, paymentDate === todayDateStr && styles.quickDateChipTextActive]}>
+                        ✓ {lang === 'ta' ? 'இன்று (Today)' : 'Today'}
+                      </Text>
+                    </TouchableOpacity>
+
+                    <TouchableOpacity
+                      style={[styles.quickDateChip, paymentDate === yesterdayDateStr && styles.quickDateChipActive]}
+                      onPress={() => {
+                        setPaymentDate(yesterdayDateStr);
+                        setDateError('');
+                      }}
+                    >
+                      <Text style={[styles.quickDateChipText, paymentDate === yesterdayDateStr && styles.quickDateChipTextActive]}>
+                        {lang === 'ta' ? 'நேற்று (Yesterday)' : 'Yesterday'}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {dateError ? (
+                    <Text style={styles.dateErrorText}>⚠️ {dateError}</Text>
+                  ) : (
+                    <Text style={styles.dateHelperText}>
+                      {lang === 'ta' ? 'இன்று அல்லது முந்தைய தேதியை மட்டுமே தேர்ந்தெடுக்க முடியும்' : 'Only today or previous dates can be selected'}
+                    </Text>
+                  )}
 
                   {/* Payment Mode Selector */}
                   <Text style={styles.inputLabel}>{t.paymentMode} *</Text>
@@ -525,9 +740,15 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
             <View style={styles.receiptActions}>
               <TouchableOpacity
                 style={styles.pdfBtn}
+                onPress={() => receiptData && printOrShareReceipt(receiptData, 'download')}
+              >
+                <Text style={styles.pdfBtnText}>📥 {lang === 'ta' ? 'PDF சேமிக்க' : 'Save PDF'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.shareBtn}
                 onPress={() => receiptData && printOrShareReceipt(receiptData, 'share')}
               >
-                <Text style={styles.pdfBtnText}>📥 {t.downloadPdf}</Text>
+                <Text style={styles.shareBtnText}>📤 {lang === 'ta' ? 'பகிர' : 'Share'}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={styles.doneBtn}
@@ -536,6 +757,124 @@ export const CollectorDashboardScreen: React.FC<CollectorDashboardProps> = ({
                 <Text style={styles.doneBtnText}>{t.close}</Text>
               </TouchableOpacity>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* 6. CALENDAR DATE PICKER MODAL (FOR PAYMENT DATE) */}
+      <Modal
+        visible={showDatePickerModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowDatePickerModal(false)}
+      >
+        <View style={styles.modalOverlayCenter}>
+          <View style={styles.calendarModalCard}>
+            <View style={styles.calendarHeader}>
+              <TouchableOpacity
+                style={styles.calendarNavBtn}
+                onPress={handlePrevMonth}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.calendarNavBtnText}>‹</Text>
+              </TouchableOpacity>
+
+              <Text style={styles.calendarMonthTitle}>
+                {MONTH_NAMES.find(m => m.value === calendarMonth)?.[lang === 'ta' ? 'ta' : 'en'] || `Month ${calendarMonth}`} {calendarYear}
+              </Text>
+
+              <TouchableOpacity
+                style={[styles.calendarNavBtn, !canGoNextMonth && styles.calendarNavBtnDisabled]}
+                onPress={handleNextMonth}
+                disabled={!canGoNextMonth}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.calendarNavBtnText, !canGoNextMonth && { color: '#CBD5E1' }]}>›</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Weekday Names */}
+            <View style={styles.calendarWeekRow}>
+              {(lang === 'ta'
+                ? ['ஞா', 'தி', 'செ', 'பு', 'வி', 'வெ', 'ச']
+                : ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa']
+              ).map((dayName, idx) => (
+                <Text key={idx} style={styles.calendarWeekDayText}>
+                  {dayName}
+                </Text>
+              ))}
+            </View>
+
+            {/* Calendar Days Grid */}
+            <View style={styles.calendarGrid}>
+              {/* Empty leading offset cells */}
+              {Array.from({ length: firstDayCalendarIndex }).map((_, idx) => (
+                <View key={`empty-${idx}`} style={styles.calendarDayCell} />
+              ))}
+
+              {/* Day numbers */}
+              {Array.from({ length: daysInCalendarMonth }).map((_, idx) => {
+                const dayNum = idx + 1;
+                const cellDateStr = `${calendarYear}-${String(calendarMonth).padStart(2, '0')}-${String(dayNum).padStart(2, '0')}`;
+                const isFuture = cellDateStr > todayDateStr;
+                const isSelected = paymentDate === cellDateStr;
+                const isToday = cellDateStr === todayDateStr;
+
+                if (isFuture) {
+                  return (
+                    <View key={`day-${dayNum}`} style={styles.calendarDayCell}>
+                      <View style={[styles.calendarDayBtn, styles.calendarDayBtnDisabled]}>
+                        <Text style={[styles.calendarDayText, styles.calendarDayTextDisabled]}>
+                          {dayNum}
+                        </Text>
+                      </View>
+                    </View>
+                  );
+                }
+
+                return (
+                  <View key={`day-${dayNum}`} style={styles.calendarDayCell}>
+                    <TouchableOpacity
+                      style={[
+                        styles.calendarDayBtn,
+                        isToday && styles.calendarDayBtnToday,
+                        isSelected && styles.calendarDayBtnSelected
+                      ]}
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        setPaymentDate(cellDateStr);
+                        setDateError('');
+                        setShowDatePickerModal(false);
+                      }}
+                    >
+                      <Text
+                        style={[
+                          styles.calendarDayText,
+                          isToday && styles.calendarDayTextToday,
+                          isSelected && styles.calendarDayTextSelected
+                        ]}
+                      >
+                        {dayNum}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              })}
+            </View>
+
+            <Text style={styles.calendarBottomNote}>
+              {lang === 'ta'
+                ? 'ℹ️ எதிர்கால தேதிகள் முடக்கப்பட்டுள்ளன (இன்று/முந்தைய தேதிகள் மட்டுமே)'
+                : 'ℹ️ Future dates are disabled (Today & past dates only)'}
+            </Text>
+
+            <TouchableOpacity
+              style={styles.calendarCloseBtn}
+              activeOpacity={0.7}
+              onPress={() => setShowDatePickerModal(false)}
+            >
+              <Text style={styles.calendarCloseBtnText}>{t.cancel || 'Cancel'}</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -770,40 +1109,68 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     marginVertical: 4
   },
+  collectorMarkAllBtn: {
+    backgroundColor: '#0B3C2D',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    marginBottom: 12
+  },
+  collectorMarkAllBtnText: {
+    color: '#FDE047',
+    fontSize: 12,
+    fontWeight: '800'
+  },
   slotChip: {
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#F1F5F9',
+    paddingVertical: 9,
+    backgroundColor: '#FFFFFF',
     borderRadius: 10,
     marginRight: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-    alignItems: 'center'
+    borderWidth: 1.5,
+    borderColor: '#CBD5E1',
+    alignItems: 'center',
+    minWidth: 84
   },
   slotChipSelected: {
     backgroundColor: '#0B3C2D',
-    borderColor: '#0B3C2D'
+    borderColor: '#D4AF37',
+    borderWidth: 2
   },
   slotChipPaid: {
-    backgroundColor: '#ECFDF5',
-    borderColor: '#A7F3D0',
-    opacity: 0.6
+    backgroundColor: '#DCFCE7',
+    borderColor: '#86EFAC',
+    borderWidth: 1.5
   },
   slotChipText: {
-    fontSize: 11,
+    fontSize: 11.5,
     fontWeight: '700',
-    color: '#334155'
+    color: '#0F172A'
   },
   slotChipTextSelected: {
-    color: '#FFFFFF'
+    color: '#FFFFFF',
+    fontWeight: '800'
+  },
+  slotChipTextPaid: {
+    color: '#065F46',
+    fontWeight: '800'
   },
   slotChipSub: {
-    fontSize: 9.5,
-    color: '#64748B',
-    marginTop: 2
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#DC2626',
+    marginTop: 3
   },
   slotChipSubSelected: {
-    color: '#FDE047'
+    color: '#FDE047',
+    fontWeight: '800'
+  },
+  slotChipSubPaid: {
+    color: '#15803D',
+    fontWeight: '800'
   },
   modeRow: {
     flexDirection: 'row',
@@ -942,6 +1309,19 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     fontSize: 12
   },
+  shareBtn: {
+    flex: 1,
+    backgroundColor: '#16A34A',
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  shareBtnText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 12
+  },
   doneBtn: {
     flex: 1,
     backgroundColor: '#F1F5F9',
@@ -953,5 +1333,206 @@ const styles = StyleSheet.create({
     color: '#334155',
     fontWeight: 'bold',
     fontSize: 12
+  },
+
+  modalOverlayCenter: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.65)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 16
+  },
+
+  // Payment Date & Calendar Picker Styles
+  dateInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 6
+  },
+  dateTextInput: {
+    flex: 1
+  },
+  textInputError: {
+    borderColor: '#EF4444',
+    backgroundColor: '#FEF2F2'
+  },
+  calendarPickerBtn: {
+    backgroundColor: '#0B3C2D',
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#D4AF37'
+  },
+  calendarPickerBtnText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  quickDateChipsRow: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 4
+  },
+  quickDateChip: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#CBD5E1'
+  },
+  quickDateChipActive: {
+    backgroundColor: '#DCFCE7',
+    borderColor: '#16A34A'
+  },
+  quickDateChipText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569'
+  },
+  quickDateChipTextActive: {
+    color: '#15803D',
+    fontWeight: '700'
+  },
+  dateErrorText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#DC2626',
+    marginTop: 2,
+    marginBottom: 4
+  },
+  dateHelperText: {
+    fontSize: 10,
+    color: '#64748B',
+    marginTop: 2,
+    marginBottom: 4
+  },
+
+  // Calendar Modal Styles
+  calendarModalCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    width: '92%',
+    maxWidth: 380,
+    padding: 16,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 10
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginBottom: 12,
+    paddingHorizontal: 4
+  },
+  calendarNavBtn: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0'
+  },
+  calendarNavBtnDisabled: {
+    opacity: 0.3
+  },
+  calendarNavBtnText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0B3C2D'
+  },
+  calendarMonthTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#0B3C2D'
+  },
+  calendarWeekRow: {
+    flexDirection: 'row',
+    width: '100%',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+    paddingBottom: 6
+  },
+  calendarWeekDayText: {
+    width: '14.28%',
+    textAlign: 'center',
+    fontSize: 11,
+    fontWeight: '700',
+    color: '#64748B'
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    width: '100%',
+    marginBottom: 12
+  },
+  calendarDayCell: {
+    width: '14.28%',
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 2
+  },
+  calendarDayBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center'
+  },
+  calendarDayBtnSelected: {
+    backgroundColor: '#0B3C2D'
+  },
+  calendarDayBtnToday: {
+    borderWidth: 1.5,
+    borderColor: '#D4AF37'
+  },
+  calendarDayBtnDisabled: {
+    backgroundColor: 'transparent',
+    opacity: 0.3
+  },
+  calendarDayText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#1E293B'
+  },
+  calendarDayTextSelected: {
+    color: '#FFFFFF',
+    fontWeight: '800'
+  },
+  calendarDayTextDisabled: {
+    color: '#94A3B8'
+  },
+  calendarDayTextToday: {
+    color: '#0B3C2D',
+    fontWeight: '800'
+  },
+  calendarBottomNote: {
+    fontSize: 10.5,
+    color: '#64748B',
+    marginBottom: 10,
+    textAlign: 'center'
+  },
+  calendarCloseBtn: {
+    paddingVertical: 9,
+    paddingHorizontal: 28,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8
+  },
+  calendarCloseBtnText: {
+    fontSize: 12.5,
+    fontWeight: '700',
+    color: '#64748B'
   }
 });

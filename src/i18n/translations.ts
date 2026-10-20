@@ -155,7 +155,10 @@ export const mobileTranslations = {
     error: 'Error',
     collectPayment: 'Collect Payment',
     saveSettings: 'Save Settings',
-    gender: 'Gender'
+    gender: 'Gender',
+    paymentDate: 'Payment Date',
+    paymentDateHelp: 'Default is today. Future dates are not allowed.',
+    futureDateError: 'Future payment date is not allowed. Only today or previous dates can be chosen.'
   },
   ta: {
     appName: 'ஊர் நிதி',
@@ -311,6 +314,9 @@ export const mobileTranslations = {
     error: 'பிழை',
     collectPayment: 'பணம் வசூலிக்க',
     saveSettings: 'அமைப்புகளை சேமிக்க',
-    gender: 'பாலினம்'
+    gender: 'பாலினம்',
+    paymentDate: 'வசூல் தேதி',
+    paymentDateHelp: 'இயல்புநிலை இன்றைய தேதி. எதிர்கால தேதிகளை தேர்ந்தெடுக்க முடியாது.',
+    futureDateError: 'எதிர்கால தேதியை தேர்வு செய்ய முடியாது. இன்று அல்லது முந்தைய தேதியை மட்டுமே தேர்வு செய்யவும்.'
   }
 };

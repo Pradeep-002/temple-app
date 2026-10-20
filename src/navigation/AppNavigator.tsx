@@ -272,6 +272,7 @@ export const AppNavigator = ({ user, setUser }: { user: any; setUser: (u: any) =
         return (
           <AdminCollectionsScreen
             lang={lang}
+            userRole={user.role}
             sangamName={user.sangamName}
             sangamSlogan={user.slogan}
           />
